@@ -135,13 +135,17 @@ public class AiViewModel : BaseViewModel
         var progress = new Progress<string>(msg => AddMsg($"⏳  {msg}"));
         try
         {
-            var cards = await _ai.GenerateFromConversationAsync(_conversation, progress);
+            var before = _generatedCards.Count;
+            // Pass the deck built so far so Claude adds NEW cards to it (dedup by
+            // German term) instead of re-generating a small deck from scratch. This
+            // is what lets the deck grow past a single response's size limit.
+            var cards = await _ai.GenerateFromConversationAsync(_conversation, _generatedCards, progress);
             _generatedCards = cards;
+            var added = cards.Count - before;
 
-            // Record the assistant's contribution as a compact summary turn so the
-            // next round has context without re-sending the full card JSON.
+            // Record the outcome as an assistant turn so the next round has context.
             _conversation.Add(new AiConversationTurn(
-                "assistant", $"(produced a deck of {cards.Count} cards)"));
+                "assistant", $"(deck now has {cards.Count} cards; added {added} this turn)"));
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -149,8 +153,10 @@ public class AiViewModel : BaseViewModel
                 foreach (var c in cards)
                     CardPreviews.Add(new AiCardPreview(c.German, c.English, c.Grammar));
             });
-            AddMsg($"🤖  {cards.Count} cards ready. Refine with another message, or name the deck and {(_editingDeckId > 0 ? "Save Changes" : "Import")}.");
-            HasCards = true;
+            AddMsg(added > 0
+                ? $"🤖  Added {added} cards — {cards.Count} total. Say \"more\" (or \"continue\") to keep growing, or name the deck and {(_editingDeckId > 0 ? "Save Changes" : "Import")}."
+                : $"🤖  No new cards this turn — {cards.Count} total. Try a more specific instruction, or name the deck and {(_editingDeckId > 0 ? "Save Changes" : "Import")}.");
+            HasCards = cards.Count > 0;
             if (string.IsNullOrWhiteSpace(DeckName))
                 DeckName = $"AI: {request[..Math.Min(45, request.Length)]}";
         }

@@ -99,47 +99,82 @@ public class AiService
     // ── Card generation ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Generates (or refines) a flashcard deck from a full conversation transcript.
-    /// The entire conversation is sent on every turn and Claude is asked to return
-    /// the COMPLETE updated deck, so one conversation always maps to exactly one
-    /// card set — continuing to chat refines the same deck rather than producing a
-    /// disjoint second one. Cached by a hash of the whole conversation.
+    /// Generates or grows a flashcard deck from the conversation transcript plus the
+    /// deck built so far. Claude is asked for a BATCH of NEW cards not already in the
+    /// deck; the result is merged with <paramref name="existingCards"/> (dedup by the
+    /// German term). This lets a deck scale to hundreds of cards over several turns —
+    /// each response stays within the model's output limit, and continuing the chat
+    /// accumulates instead of re-generating a small deck from scratch.
     /// </summary>
     public async Task<List<AiCardData>> GenerateFromConversationAsync(
         IReadOnlyList<AiConversationTurn> conversation,
+        IReadOnlyList<AiCardData> existingCards,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        var cacheKey  = ConversationCacheKey(conversation);
+        var cacheKey  = ConversationCacheKey(conversation, existingCards);
         var cacheFile = Path.Combine(CacheDir, cacheKey + ".json");
 
+        List<AiCardData>? batch = null;
         if (File.Exists(cacheFile))
         {
             progress?.Report("Loading from cache…");
             var cached = await File.ReadAllTextAsync(cacheFile, Encoding.UTF8, ct);
-            return JsonSerializer.Deserialize<List<AiCardData>>(cached, JsonOpts)
-                   ?? throw new InvalidOperationException("Cache file is corrupt.");
+            batch = JsonSerializer.Deserialize<List<AiCardData>>(cached, JsonOpts);
         }
 
-        var claudePath = await FindClaudeAsync()
-                         ?? throw new InvalidOperationException(
-                             "claude CLI not found. Install it (npm i -g @anthropic-ai/claude-code) and restart.");
+        if (batch == null)
+        {
+            var claudePath = await FindClaudeAsync()
+                             ?? throw new InvalidOperationException(
+                                 "claude CLI not found. Install it (npm i -g @anthropic-ai/claude-code) and restart.");
 
-        progress?.Report("Asking Claude to generate flashcards…");
-        var json = await RunClaudeAsync(claudePath, BuildConversationPrompt(conversation), ct);
+            progress?.Report("Asking Claude to generate flashcards…");
+            var json = await RunClaudeAsync(
+                claudePath, BuildConversationPrompt(conversation, existingCards), ct);
 
-        progress?.Report("Parsing response…");
-        var cards = ParseCards(json)
+            progress?.Report("Parsing response…");
+            batch = ParseCards(json)
                     ?? throw new InvalidOperationException(
                         $"Claude's output could not be parsed as JSON.\n\nRaw:\n{Trim(json, 600)}");
 
-        if (cards.Count == 0)
+            await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(batch, JsonOpts), Encoding.UTF8, ct);
+        }
+
+        var merged = MergeDecks(existingCards, batch);
+        if (merged.Count == 0)
             throw new InvalidOperationException("Claude returned an empty card list.");
 
-        await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(cards, JsonOpts), Encoding.UTF8, ct);
-        progress?.Report($"✓ {cards.Count} cards ready.");
-        return cards;
+        var added = merged.Count - existingCards.Count;
+        progress?.Report(added > 0
+            ? $"✓ Added {added} new cards ({merged.Count} total)."
+            : $"✓ No new cards this turn ({merged.Count} total). Try a more specific instruction.");
+        return merged;
     }
+
+    /// <summary>
+    /// Merges a freshly generated batch into the existing deck, keeping order and
+    /// dropping cards whose German term already exists (case/whitespace-insensitive).
+    /// </summary>
+    private static List<AiCardData> MergeDecks(
+        IReadOnlyList<AiCardData> existing, IReadOnlyList<AiCardData> batch)
+    {
+        var result = new List<AiCardData>(existing);
+        var seen   = new HashSet<string>(
+            existing.Select(c => NormalizeTerm(c.German)), StringComparer.Ordinal);
+
+        foreach (var card in batch)
+        {
+            if (string.IsNullOrWhiteSpace(card.German)) continue;
+            if (seen.Add(NormalizeTerm(card.German)))
+                result.Add(card);
+        }
+        return result;
+    }
+
+    private static string NormalizeTerm(string german) =>
+        string.Join(' ', (german ?? "").Trim().ToLowerInvariant()
+                                        .Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
@@ -201,7 +236,14 @@ public class AiService
         return stdout.Trim();
     }
 
-    private static string BuildConversationPrompt(IReadOnlyList<AiConversationTurn> conversation)
+    // Cap on how many cards we ask for in a single response. Large "complete deck"
+    // requests exceed the model's output limit and silently truncate, so we grow the
+    // deck in batches instead — the user continues the chat to reach large targets.
+    private const int MaxBatch = 60;
+
+    private static string BuildConversationPrompt(
+        IReadOnlyList<AiConversationTurn> conversation,
+        IReadOnlyList<AiCardData> existingCards)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are a German language flashcard generator.");
@@ -214,11 +256,13 @@ public class AiService
         sb.AppendLine("- \"example_de\" : a natural German example sentence");
         sb.AppendLine("- \"example_en\" : English translation of that sentence");
         sb.AppendLine();
-        sb.AppendLine("Below is the conversation so far between the user and you. Treat it as ongoing:");
-        sb.AppendLine("apply every instruction in order and return the COMPLETE updated deck that");
-        sb.AppendLine("reflects all requests — not just the newest one. If the latest message asks to");
-        sb.AppendLine("add, remove, or change cards, produce the full resulting list.");
+        sb.AppendLine($"Return a batch of AT MOST {MaxBatch} NEW cards that are NOT already in the deck below.");
+        sb.AppendLine("Do NOT repeat any German term that already exists in the current deck.");
+        sb.AppendLine("If the user asked for a large deck (e.g. \"top 300\", \"500 words\"), just return the");
+        sb.AppendLine("next batch toward that goal — the user will continue the chat to request more.");
+        sb.AppendLine("Follow every instruction in the conversation, focusing on the latest message.");
         sb.AppendLine();
+
         sb.AppendLine("=== CONVERSATION ===");
         foreach (var turn in conversation)
         {
@@ -227,7 +271,22 @@ public class AiService
         }
         sb.AppendLine("=== END CONVERSATION ===");
         sb.AppendLine();
-        sb.AppendLine("Now output the complete JSON array for the current deck.");
+
+        sb.AppendLine($"=== CURRENT DECK ({existingCards.Count} cards already made — do NOT repeat these German terms) ===");
+        if (existingCards.Count == 0)
+        {
+            sb.AppendLine("(empty — this is the first batch)");
+        }
+        else
+        {
+            // Send only the German terms: enough to dedup, cheap on tokens so the deck
+            // can grow large without the prompt ballooning.
+            foreach (var c in existingCards)
+                sb.AppendLine($"- {c.German}");
+        }
+        sb.AppendLine("=== END CURRENT DECK ===");
+        sb.AppendLine();
+        sb.AppendLine($"Now output a JSON array of up to {MaxBatch} NEW cards to add to this deck.");
         return sb.ToString();
     }
 
@@ -244,10 +303,15 @@ public class AiService
         catch { return null; }
     }
 
-    private static string ConversationCacheKey(IReadOnlyList<AiConversationTurn> conversation)
+    private static string ConversationCacheKey(
+        IReadOnlyList<AiConversationTurn> conversation,
+        IReadOnlyList<AiCardData> existingCards)
     {
-        var joined = string.Join("\n", conversation.Select(t => $"{t.Role}:{t.Text.Trim()}"))
-                           .ToLowerInvariant();
+        // Include the current deck size + terms: the same conversation applied to a
+        // different deck state must produce a different (fresh) batch, not a stale hit.
+        var convo = string.Join("\n", conversation.Select(t => $"{t.Role}:{t.Text.Trim()}"));
+        var deck  = string.Join("\n", existingCards.Select(c => c.German.Trim()));
+        var joined = ($"{convo}\n##DECK##\n{deck}").ToLowerInvariant();
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(joined)));
     }
 
