@@ -76,11 +76,12 @@
                             Padding="0,8" VerticalAlignment="Bottom"/>
                 </Grid>
 
-                <!-- Request input + Generate -->
+                <!-- Request input + Generate / More -->
                 <Grid Grid.Row="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="110"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
                         <TextBlock Text="What flashcards do you want to create?" FontSize="11"
@@ -95,7 +96,12 @@
                             </TextBox.Resources>
                         </TextBox>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="✨  Generate"
+                    <Button Grid.Column="1" Content="➕  More"
+                            Command="{Binding MoreCommand}"
+                            Style="{StaticResource SuccessBtn}" FontSize="13"
+                            Padding="0,8" Margin="0,0,8,0" VerticalAlignment="Bottom"
+                            ToolTip="Add the next batch of new cards — no typing needed"/>
+                    <Button Grid.Column="2" Content="✨  Generate"
                             Command="{Binding GenerateCommand}"
                             Style="{StaticResource PrimaryBtn}" FontSize="13"
                             Padding="0,8" VerticalAlignment="Bottom"/>

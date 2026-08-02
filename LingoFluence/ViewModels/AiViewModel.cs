@@ -68,13 +68,19 @@ public class AiViewModel : BaseViewModel
     public int ImportedDeckId { get; private set; } = -1;
 
     public ICommand GenerateCommand { get; }
+    public ICommand MoreCommand     { get; }
     public ICommand ImportCommand   { get; }
 
     public AiViewModel()
     {
         GenerateCommand = new RelayCommand(
-            async _ => await GenerateAsync(),
+            async _ => await GenerateAsync(UserRequest.Trim()),
             _ => !IsGenerating && !string.IsNullOrWhiteSpace(UserRequest));
+        // "More" needs no typing — it asks for the next batch of new cards. Enabled
+        // once at least one batch exists so there's a deck to grow.
+        MoreCommand = new RelayCommand(
+            async _ => await GenerateAsync("Add more cards toward the goal, continuing from the current deck."),
+            _ => HasCards && !IsGenerating);
         ImportCommand = new RelayCommand(
             async _ => await ImportAsync(),
             _ => HasCards && !IsGenerating && !string.IsNullOrWhiteSpace(DeckName));
@@ -124,9 +130,9 @@ public class AiViewModel : BaseViewModel
             : "⚠️  claude CLI not found in PATH. Install it (npm i -g @anthropic-ai/claude-code) and restart.");
     }
 
-    private async Task GenerateAsync()
+    private async Task GenerateAsync(string request)
     {
-        var request = UserRequest.Trim();
+        if (string.IsNullOrWhiteSpace(request)) return;
         _conversation.Add(new AiConversationTurn("user", request));
         AddMsg($"🧑  {request}");
         UserRequest = "";
