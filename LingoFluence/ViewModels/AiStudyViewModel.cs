@@ -11,9 +11,10 @@ namespace LingoFluence.ViewModels;
 public class AiStudyViewModel : BaseViewModel
 {
     private readonly DatabaseService         _db;
-    private readonly SpacedRepetitionService _srs   = new();
-    private readonly AudioService            _audio = new();
-    private readonly TtsService              _tts   = new();
+    private readonly SpacedRepetitionService _srs    = new();
+    private readonly AudioService            _audio  = new();
+    private readonly TtsService              _tts    = new();
+    private readonly TranslationService      _trans  = new();
 
     private List<Card>    _queue     = new();
     private int           _index;
@@ -31,12 +32,21 @@ public class AiStudyViewModel : BaseViewModel
 
     public string GermanText  { get => _germanText;  private set => Set(ref _germanText,  value); }
     public string EnglishText { get => _englishText; private set => Set(ref _englishText, value); }
-    public string ChineseText { get => _chineseText; private set => Set(ref _chineseText, value); }
+    public string ChineseText { get => _chineseText; private set { Set(ref _chineseText, value); OnPropertyChanged(nameof(HasChinese)); OnPropertyChanged(nameof(CanFetchChinese)); } }
     public string GrammarText { get => _grammarText; private set => Set(ref _grammarText, value); }
     public string ExampleDe   { get => _exampleDe;   private set => Set(ref _exampleDe,   value); }
     public string ExampleEn   { get => _exampleEn;   private set => Set(ref _exampleEn,   value); }
 
+    private bool _isFetchingChinese;
+    public bool IsFetchingChinese
+    {
+        get => _isFetchingChinese;
+        private set { Set(ref _isFetchingChinese, value); OnPropertyChanged(nameof(CanFetchChinese)); }
+    }
+
     public bool HasChinese   => !string.IsNullOrWhiteSpace(ChineseText);
+    // Offer the fetch button only when flipped, this card lacks Chinese, and none is in flight.
+    public bool CanFetchChinese => IsFlipped && !HasChinese && !IsFetchingChinese;
     public bool HasGrammar   => !string.IsNullOrWhiteSpace(GrammarText);
     public bool HasExampleDe => !string.IsNullOrWhiteSpace(ExampleDe);
     public bool HasExampleEn => !string.IsNullOrWhiteSpace(ExampleEn);
@@ -51,7 +61,7 @@ public class AiStudyViewModel : BaseViewModel
     public bool IsFlipped
     {
         get => _isFlipped;
-        private set { Set(ref _isFlipped, value); OnPropertyChanged(nameof(IsFront)); OnPropertyChanged(nameof(CanGrade)); }
+        private set { Set(ref _isFlipped, value); OnPropertyChanged(nameof(IsFront)); OnPropertyChanged(nameof(CanGrade)); OnPropertyChanged(nameof(CanFetchChinese)); }
     }
     public bool IsFront  => !IsFlipped;
     public bool CanGrade => IsFlipped && !IsFinished;
@@ -69,9 +79,10 @@ public class AiStudyViewModel : BaseViewModel
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    public ICommand FlipCommand       { get; }
-    public ICommand GradeAgainCommand { get; }
-    public ICommand GradeGoodCommand  { get; }
+    public ICommand FlipCommand         { get; }
+    public ICommand GradeAgainCommand   { get; }
+    public ICommand GradeGoodCommand    { get; }
+    public ICommand FetchChineseCommand { get; }
 
     public string DeckTitle { get; private set; } = "";
 
@@ -81,6 +92,7 @@ public class AiStudyViewModel : BaseViewModel
         FlipCommand       = new RelayCommand(_ => Flip(),                        _ => IsFront && !IsFinished);
         GradeAgainCommand = new RelayCommand(_ => Grade(ReviewGrade.Again), _ => CanGrade);
         GradeGoodCommand  = new RelayCommand(_ => Grade(ReviewGrade.Good),  _ => CanGrade);
+        FetchChineseCommand = new RelayCommand(async _ => await FetchChineseAsync(), _ => CanFetchChinese);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -108,6 +120,40 @@ public class AiStudyViewModel : BaseViewModel
     // ── Internals ─────────────────────────────────────────────────────────────
 
     private void Flip() => IsFlipped = true;
+
+    /// <summary>
+    /// Fetches a Chinese meaning for the current card on demand (for older AI cards
+    /// generated before the Chinese field existed), shows it, and writes it back to
+    /// the note so it's cached permanently and never fetched again.
+    /// </summary>
+    private async Task FetchChineseAsync()
+    {
+        if (_index >= _queue.Count) return;
+        var card = _queue[_index];
+        IsFetchingChinese = true;
+        try
+        {
+            // Translate the German word; fall back to the sentence if the word is blank.
+            var source = string.IsNullOrWhiteSpace(card.FrontText) ? card.SentenceDe : card.FrontText;
+            var zh = await _trans.TranslateAsync(source, target: "zh-CN", source: "de");
+            if (string.IsNullOrWhiteSpace(zh))
+            {
+                // Leave ChineseText empty so the button stays and the user can retry.
+                System.Windows.MessageBox.Show(
+                    "翻译失败，请检查网络或代理后重试。",
+                    "获取中文", System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            card.Chinese = zh;
+            ChineseText  = zh;
+            _db.UpdateNoteChinese(card.NoteId, zh);
+        }
+        finally
+        {
+            IsFetchingChinese = false;
+        }
+    }
 
     private void Grade(ReviewGrade grade)
     {

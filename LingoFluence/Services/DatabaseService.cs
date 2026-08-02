@@ -430,6 +430,17 @@ public class DatabaseService
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Persists a fetched Chinese meaning onto a note so it's cached permanently.</summary>
+    public void UpdateNoteChinese(int noteId, string chinese)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE notes SET chinese=$c WHERE id=$id";
+        cmd.Parameters.AddWithValue("$c", chinese);
+        cmd.Parameters.AddWithValue("$id", noteId);
+        cmd.ExecuteNonQuery();
+    }
+
     public void UpdateDeckMediaFolder(int deckId, string mediaFolder)
     {
         using var conn = Open();
