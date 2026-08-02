@@ -123,7 +123,7 @@ public class MainViewModel : BaseViewModel
                     return (row.AnkiNoteId, row.Answer, row.Context, audio,
                             row.AnkiCardId, row.DueDate, row.Interval,
                             row.Ease, row.Reps, row.Lapses, row.State,
-                            row.SentenceDe, row.WordEn, row.SentenceEn);
+                            row.SentenceDe, row.WordEn, row.SentenceEn, chinese: "");
                 });
 
                 _db.SaveNotesAndCards(deckId, rows);

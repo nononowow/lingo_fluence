@@ -60,6 +60,8 @@ public class DatabaseService
         EnsureColumn(conn, "notes", "sentence_de", "TEXT");
         EnsureColumn(conn, "notes", "word_en",     "TEXT");
         EnsureColumn(conn, "notes", "sentence_en", "TEXT");
+        // Chinese meaning of the word (AI decks). Empty for imported Anki decks.
+        EnsureColumn(conn, "notes", "chinese",     "TEXT");
         EnsureColumn(conn, "decks", "is_ai",       "INTEGER NOT NULL DEFAULT 0");
         // Stores the AI generation transcript (JSON array of AiConversationTurn)
         // so an AI deck can be reopened and refined.
@@ -252,7 +254,7 @@ public class DatabaseService
         using var conn = Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT n.answer_text, n.context_text, n.word_en, n.sentence_de, n.sentence_en
+            SELECT n.answer_text, n.context_text, n.word_en, n.sentence_de, n.sentence_en, n.chinese
             FROM notes n WHERE n.deck_id=$d ORDER BY n.id ASC";
         cmd.Parameters.AddWithValue("$d", deckId);
 
@@ -265,7 +267,8 @@ public class DatabaseService
                 English:   r.IsDBNull(1) ? "" : r.GetString(1),
                 Grammar:   r.IsDBNull(2) ? "" : r.GetString(2),
                 ExampleDe: r.IsDBNull(3) ? "" : r.GetString(3),
-                ExampleEn: r.IsDBNull(4) ? "" : r.GetString(4)));
+                ExampleEn: r.IsDBNull(4) ? "" : r.GetString(4),
+                Chinese:   r.IsDBNull(5) ? "" : r.GetString(5)));
         }
         return list;
     }
@@ -277,7 +280,7 @@ public class DatabaseService
     private static IEnumerable<(long ankiNoteId, string answer, string context, string? audio,
                      long ankiCardId, DateTime dueDate, int interval, double ease,
                      int reps, int lapses, CardState state,
-                     string sentenceDe, string wordEn, string sentenceEn)>
+                     string sentenceDe, string wordEn, string sentenceEn, string chinese)>
         BuildAiRows(IEnumerable<AiCardData> cards)
     {
         var baseId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -297,7 +300,8 @@ public class DatabaseService
                     state:      CardState.New,
                     sentenceDe: c.ExampleDe,
                     wordEn:     c.Grammar,
-                    sentenceEn: c.ExampleEn);
+                    sentenceEn: c.ExampleEn,
+                    chinese:    c.Chinese);
         });
     }
 
@@ -307,15 +311,15 @@ public class DatabaseService
         IEnumerable<(long ankiNoteId, string answer, string context, string? audio,
                      long ankiCardId, DateTime dueDate, int interval, double ease,
                      int reps, int lapses, CardState state,
-                     string sentenceDe, string wordEn, string sentenceEn)> rows)
+                     string sentenceDe, string wordEn, string sentenceEn, string chinese)> rows)
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
         using var noteCmd = conn.CreateCommand();
         noteCmd.CommandText = @"
             INSERT INTO notes (deck_id, anki_note_id, answer_text, context_text, audio_file,
-                               sentence_de, word_en, sentence_en)
-            VALUES ($d,$an,$a,$c,$au,$sd,$we,$se); SELECT last_insert_rowid();";
+                               sentence_de, word_en, sentence_en, chinese)
+            VALUES ($d,$an,$a,$c,$au,$sd,$we,$se,$zh); SELECT last_insert_rowid();";
 
         using var cardCmd = conn.CreateCommand();
         cardCmd.CommandText = @"
@@ -334,6 +338,7 @@ public class DatabaseService
             noteCmd.Parameters.AddWithValue("$sd", string.IsNullOrEmpty(row.sentenceDe) ? (object)DBNull.Value : row.sentenceDe);
             noteCmd.Parameters.AddWithValue("$we", string.IsNullOrEmpty(row.wordEn)     ? (object)DBNull.Value : row.wordEn);
             noteCmd.Parameters.AddWithValue("$se", string.IsNullOrEmpty(row.sentenceEn) ? (object)DBNull.Value : row.sentenceEn);
+            noteCmd.Parameters.AddWithValue("$zh", string.IsNullOrEmpty(row.chinese)    ? (object)DBNull.Value : row.chinese);
             var noteId = Convert.ToInt32(noteCmd.ExecuteScalar());
 
             cardCmd.Parameters.Clear();
@@ -362,7 +367,7 @@ public class DatabaseService
                    n.answer_text, n.context_text, n.audio_file,
                    c.due_date, c.interval, c.ease_factor,
                    c.rep_count, c.lapse_count, c.card_state,
-                   n.sentence_de, n.word_en, n.sentence_en
+                   n.sentence_de, n.word_en, n.sentence_en, n.chinese
             FROM cards c
             JOIN notes n ON n.id = c.note_id
             WHERE c.deck_id = $did
@@ -395,7 +400,8 @@ public class DatabaseService
                 State      = state,
                 SentenceDe = r.IsDBNull(12) ? "" : r.GetString(12),
                 WordEn     = r.IsDBNull(13) ? "" : r.GetString(13),
-                SentenceEn = r.IsDBNull(14) ? "" : r.GetString(14)
+                SentenceEn = r.IsDBNull(14) ? "" : r.GetString(14),
+                Chinese    = r.IsDBNull(15) ? "" : r.GetString(15)
             });
         }
         return result;

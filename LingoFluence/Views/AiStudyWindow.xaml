@@ -57,6 +57,10 @@
                     <!-- English meaning -->
                     <TextBlock Text="{Binding EnglishText}" FontSize="18"
                                Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <!-- Chinese meaning -->
+                    <TextBlock Text="{Binding ChineseText}" FontSize="18"
+                               Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Visibility="{Binding HasChinese, Converter={StaticResource BoolToVis}}"/>
                     <!-- Grammar note -->
                     <TextBlock Text="{Binding GrammarText}" FontSize="13" FontStyle="Italic"
                                Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"

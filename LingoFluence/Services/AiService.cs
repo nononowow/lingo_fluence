@@ -252,6 +252,7 @@ public class AiService
         sb.AppendLine("Each object must have exactly these string fields:");
         sb.AppendLine("- \"german\"     : the German word/phrase (nouns with article, e.g. \"der Hund\")");
         sb.AppendLine("- \"english\"    : concise English meaning, include key usage notes");
+        sb.AppendLine("- \"chinese\"    : concise Chinese (简体中文) meaning of the word");
         sb.AppendLine("- \"grammar\"    : grammar note, e.g. \"noun: der Hund, Hunde · masculine\" or \"verb: kaufen, kaufte, hat gekauft\"");
         sb.AppendLine("- \"example_de\" : a natural German example sentence");
         sb.AppendLine("- \"example_en\" : English translation of that sentence");

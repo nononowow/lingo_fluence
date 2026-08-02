@@ -24,16 +24,19 @@ public class AiStudyViewModel : BaseViewModel
 
     private string _germanText  = "";
     private string _englishText = "";
+    private string _chineseText = "";
     private string _grammarText = "";
     private string _exampleDe   = "";
     private string _exampleEn   = "";
 
     public string GermanText  { get => _germanText;  private set => Set(ref _germanText,  value); }
     public string EnglishText { get => _englishText; private set => Set(ref _englishText, value); }
+    public string ChineseText { get => _chineseText; private set => Set(ref _chineseText, value); }
     public string GrammarText { get => _grammarText; private set => Set(ref _grammarText, value); }
     public string ExampleDe   { get => _exampleDe;   private set => Set(ref _exampleDe,   value); }
     public string ExampleEn   { get => _exampleEn;   private set => Set(ref _exampleEn,   value); }
 
+    public bool HasChinese   => !string.IsNullOrWhiteSpace(ChineseText);
     public bool HasGrammar   => !string.IsNullOrWhiteSpace(GrammarText);
     public bool HasExampleDe => !string.IsNullOrWhiteSpace(ExampleDe);
     public bool HasExampleEn => !string.IsNullOrWhiteSpace(ExampleEn);
@@ -133,11 +136,13 @@ public class AiStudyViewModel : BaseViewModel
         var c = _queue[_index];
         GermanText  = c.FrontText;
         EnglishText = c.BackText;
+        ChineseText = c.Chinese;
         GrammarText = c.WordEn;
         ExampleDe   = c.SentenceDe;
         ExampleEn   = c.SentenceEn;
         IsFlipped   = false;
         IsFinished  = false;
+        OnPropertyChanged(nameof(HasChinese));
         OnPropertyChanged(nameof(HasGrammar));
         OnPropertyChanged(nameof(HasExampleDe));
         OnPropertyChanged(nameof(HasExampleEn));

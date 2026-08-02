@@ -11,5 +11,6 @@ public record AiCardData(
     string English,
     string Grammar,
     [property: JsonPropertyName("example_de")] string ExampleDe,
-    [property: JsonPropertyName("example_en")] string ExampleEn
+    [property: JsonPropertyName("example_en")] string ExampleEn,
+    [property: JsonPropertyName("chinese")] string Chinese = ""
 );
