@@ -53,12 +53,47 @@ public class AiService
             await proc.WaitForExitAsync();
 
             _claudePath = proc.ExitCode == 0
-                ? output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries)[0].Trim()
+                ? PickExecutable(output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 : "";
         }
         catch { _claudePath = ""; }
 
         return string.IsNullOrEmpty(_claudePath) ? null : _claudePath;
+    }
+
+    /// <summary>
+    /// where.exe can return several matches for "claude". npm installs both an
+    /// extensionless Unix shell script and a Windows wrapper (claude.cmd); only
+    /// the wrapper (or a real .exe) can be launched on Windows. Prefer an
+    /// executable variant, and if only the extensionless script is found, probe
+    /// for a sibling .cmd/.exe/.bat on disk.
+    /// </summary>
+    private static string PickExecutable(string[] candidates)
+    {
+        var paths = candidates.Select(c => c.Trim())
+                              .Where(c => c.Length > 0)
+                              .ToArray();
+        if (paths.Length == 0) return "";
+
+        // Priority order of extensions Windows can actually start.
+        string[] preferred = { ".exe", ".cmd", ".bat" };
+        foreach (var ext in preferred)
+        {
+            var hit = paths.FirstOrDefault(
+                p => p.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+            if (hit != null) return hit;
+        }
+
+        // Only an extensionless match (e.g. the npm shell script) — look for a
+        // launchable sibling next to it before giving up.
+        var first = paths[0];
+        foreach (var ext in preferred)
+        {
+            var sibling = first + ext;
+            if (File.Exists(sibling)) return sibling;
+        }
+
+        return first;
     }
 
     // ── Card generation ───────────────────────────────────────────────────────
