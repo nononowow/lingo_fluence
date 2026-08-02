@@ -139,6 +139,10 @@ public class AiService
     private static async Task<string> RunClaudeAsync(
         string claudePath, string prompt, CancellationToken ct)
     {
+        // The prompt is multi-line. Passing it as a command-line argument breaks
+        // under cmd.exe (newlines terminate the command), so we write it to the
+        // process's stdin instead and invoke `claude -p` with no inline value —
+        // claude reads the prompt from stdin. This also avoids all shell quoting.
         ProcessStartInfo psi;
 
         // npm-installed claude is a .cmd wrapper — needs cmd.exe on Windows
@@ -149,6 +153,7 @@ public class AiService
             {
                 FileName = "cmd.exe",
                 UseShellExecute = false,
+                RedirectStandardInput  = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true,
                 CreateNoWindow = true,
@@ -163,6 +168,7 @@ public class AiService
             {
                 FileName = claudePath,
                 UseShellExecute = false,
+                RedirectStandardInput  = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError  = true,
                 CreateNoWindow = true,
@@ -170,9 +176,13 @@ public class AiService
             };
         }
         psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add(prompt);
 
-        using var proc   = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start claude.");
+        using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start claude.");
+
+        // Feed the prompt via stdin, then close it so claude knows input is done.
+        await proc.StandardInput.WriteAsync(prompt);
+        proc.StandardInput.Close();
+
         var stdoutTask   = proc.StandardOutput.ReadToEndAsync(ct);
         var stderrTask   = proc.StandardError.ReadToEndAsync(ct);
         await proc.WaitForExitAsync(ct);
