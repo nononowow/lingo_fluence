@@ -16,6 +16,7 @@ public class Card
     public string WordEn { get; set; } = "";     // English translation of the word
     public string SentenceEn { get; set; } = ""; // English example sentence
     public string Chinese { get; set; } = "";    // Chinese meaning of the word (AI decks)
+    public string SentenceZh { get; set; } = ""; // Chinese translation of the German example sentence (on-demand)
     public DateTime DueDate { get; set; } = DateTime.Today;
     public int Interval { get; set; } = 0; // days; 0 = new/learning
     public double EaseFactor { get; set; } = 2.5;

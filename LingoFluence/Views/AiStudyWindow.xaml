@@ -93,6 +93,18 @@
                         <Button Grid.Column="1" Content="🔊" Tag="{Binding ExampleEn}" Click="SpeakEN_Click"
                                 Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
                     </Grid>
+                    <!-- Example DE → Chinese translation -->
+                    <TextBlock Text="{Binding ExampleZh}" FontSize="14"
+                               Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Visibility="{Binding HasExampleZh, Converter={StaticResource BoolToVis}}"/>
+                    <!-- On-demand Chinese fetch for the German example sentence -->
+                    <Button Content="🌐  例句中文" Command="{Binding FetchExampleZhCommand}"
+                            Style="{StaticResource GhostBtn}" Padding="10,5" HorizontalAlignment="Left"
+                            Margin="0,8,0,0"
+                            Visibility="{Binding CanFetchExampleZh, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="⏳  正在获取中文…" FontSize="13"
+                               Foreground="{StaticResource SecondaryTextBrush}" Margin="0,8,0,0"
+                               Visibility="{Binding IsFetchingExampleZh, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
             </ScrollViewer>
         </Border>

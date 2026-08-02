@@ -62,6 +62,8 @@ public class DatabaseService
         EnsureColumn(conn, "notes", "sentence_en", "TEXT");
         // Chinese meaning of the word (AI decks). Empty for imported Anki decks.
         EnsureColumn(conn, "notes", "chinese",     "TEXT");
+        // Chinese translation of the German example sentence. Filled on demand and cached.
+        EnsureColumn(conn, "notes", "sentence_zh", "TEXT");
         EnsureColumn(conn, "decks", "is_ai",       "INTEGER NOT NULL DEFAULT 0");
         // Stores the AI generation transcript (JSON array of AiConversationTurn)
         // so an AI deck can be reopened and refined.
@@ -367,7 +369,7 @@ public class DatabaseService
                    n.answer_text, n.context_text, n.audio_file,
                    c.due_date, c.interval, c.ease_factor,
                    c.rep_count, c.lapse_count, c.card_state,
-                   n.sentence_de, n.word_en, n.sentence_en, n.chinese
+                   n.sentence_de, n.word_en, n.sentence_en, n.chinese, n.sentence_zh
             FROM cards c
             JOIN notes n ON n.id = c.note_id
             WHERE c.deck_id = $did
@@ -401,7 +403,8 @@ public class DatabaseService
                 SentenceDe = r.IsDBNull(12) ? "" : r.GetString(12),
                 WordEn     = r.IsDBNull(13) ? "" : r.GetString(13),
                 SentenceEn = r.IsDBNull(14) ? "" : r.GetString(14),
-                Chinese    = r.IsDBNull(15) ? "" : r.GetString(15)
+                Chinese    = r.IsDBNull(15) ? "" : r.GetString(15),
+                SentenceZh = r.IsDBNull(16) ? "" : r.GetString(16)
             });
         }
         return result;
@@ -437,6 +440,17 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE notes SET chinese=$c WHERE id=$id";
         cmd.Parameters.AddWithValue("$c", chinese);
+        cmd.Parameters.AddWithValue("$id", noteId);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Persists a fetched Chinese sentence translation onto a note so it's cached permanently.</summary>
+    public void UpdateNoteSentenceZh(int noteId, string sentenceZh)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE notes SET sentence_zh=$c WHERE id=$id";
+        cmd.Parameters.AddWithValue("$c", sentenceZh);
         cmd.Parameters.AddWithValue("$id", noteId);
         cmd.ExecuteNonQuery();
     }

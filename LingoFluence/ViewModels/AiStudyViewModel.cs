@@ -29,6 +29,7 @@ public class AiStudyViewModel : BaseViewModel
     private string _grammarText = "";
     private string _exampleDe   = "";
     private string _exampleEn   = "";
+    private string _exampleZh   = "";
 
     public string GermanText  { get => _germanText;  private set => Set(ref _germanText,  value); }
     public string EnglishText { get => _englishText; private set => Set(ref _englishText, value); }
@@ -36,6 +37,7 @@ public class AiStudyViewModel : BaseViewModel
     public string GrammarText { get => _grammarText; private set => Set(ref _grammarText, value); }
     public string ExampleDe   { get => _exampleDe;   private set => Set(ref _exampleDe,   value); }
     public string ExampleEn   { get => _exampleEn;   private set => Set(ref _exampleEn,   value); }
+    public string ExampleZh   { get => _exampleZh;   private set { Set(ref _exampleZh, value); OnPropertyChanged(nameof(HasExampleZh)); OnPropertyChanged(nameof(CanFetchExampleZh)); } }
 
     private bool _isFetchingChinese;
     public bool IsFetchingChinese
@@ -44,12 +46,23 @@ public class AiStudyViewModel : BaseViewModel
         private set { Set(ref _isFetchingChinese, value); OnPropertyChanged(nameof(CanFetchChinese)); }
     }
 
+    private bool _isFetchingExampleZh;
+    public bool IsFetchingExampleZh
+    {
+        get => _isFetchingExampleZh;
+        private set { Set(ref _isFetchingExampleZh, value); OnPropertyChanged(nameof(CanFetchExampleZh)); }
+    }
+
     public bool HasChinese   => !string.IsNullOrWhiteSpace(ChineseText);
     // Offer the fetch button only when flipped, this card lacks Chinese, and none is in flight.
     public bool CanFetchChinese => IsFlipped && !HasChinese && !IsFetchingChinese;
     public bool HasGrammar   => !string.IsNullOrWhiteSpace(GrammarText);
     public bool HasExampleDe => !string.IsNullOrWhiteSpace(ExampleDe);
     public bool HasExampleEn => !string.IsNullOrWhiteSpace(ExampleEn);
+    public bool HasExampleZh => !string.IsNullOrWhiteSpace(ExampleZh);
+    // Offer the sentence-fetch button only when flipped, there is a German sentence,
+    // it lacks a Chinese translation, and none is in flight.
+    public bool CanFetchExampleZh => IsFlipped && HasExampleDe && !HasExampleZh && !IsFetchingExampleZh;
 
     // ── Flip + progress ───────────────────────────────────────────────────────
 
@@ -61,7 +74,7 @@ public class AiStudyViewModel : BaseViewModel
     public bool IsFlipped
     {
         get => _isFlipped;
-        private set { Set(ref _isFlipped, value); OnPropertyChanged(nameof(IsFront)); OnPropertyChanged(nameof(CanGrade)); OnPropertyChanged(nameof(CanFetchChinese)); }
+        private set { Set(ref _isFlipped, value); OnPropertyChanged(nameof(IsFront)); OnPropertyChanged(nameof(CanGrade)); OnPropertyChanged(nameof(CanFetchChinese)); OnPropertyChanged(nameof(CanFetchExampleZh)); }
     }
     public bool IsFront  => !IsFlipped;
     public bool CanGrade => IsFlipped && !IsFinished;
@@ -83,6 +96,7 @@ public class AiStudyViewModel : BaseViewModel
     public ICommand GradeAgainCommand   { get; }
     public ICommand GradeGoodCommand    { get; }
     public ICommand FetchChineseCommand { get; }
+    public ICommand FetchExampleZhCommand { get; }
 
     public string DeckTitle { get; private set; } = "";
 
@@ -93,6 +107,7 @@ public class AiStudyViewModel : BaseViewModel
         GradeAgainCommand = new RelayCommand(_ => Grade(ReviewGrade.Again), _ => CanGrade);
         GradeGoodCommand  = new RelayCommand(_ => Grade(ReviewGrade.Good),  _ => CanGrade);
         FetchChineseCommand = new RelayCommand(async _ => await FetchChineseAsync(), _ => CanFetchChinese);
+        FetchExampleZhCommand = new RelayCommand(async _ => await FetchExampleZhAsync(), _ => CanFetchExampleZh);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -155,6 +170,38 @@ public class AiStudyViewModel : BaseViewModel
         }
     }
 
+    /// <summary>
+    /// Fetches a Chinese translation of the German example sentence on demand,
+    /// shows it, and writes it back to the note so it's cached permanently.
+    /// </summary>
+    private async Task FetchExampleZhAsync()
+    {
+        if (_index >= _queue.Count) return;
+        var card = _queue[_index];
+        if (string.IsNullOrWhiteSpace(card.SentenceDe)) return;
+        IsFetchingExampleZh = true;
+        try
+        {
+            var zh = await _trans.TranslateAsync(card.SentenceDe, target: "zh-CN", source: "de");
+            if (string.IsNullOrWhiteSpace(zh))
+            {
+                // Leave ExampleZh empty so the button stays and the user can retry.
+                System.Windows.MessageBox.Show(
+                    "翻译失败，请检查网络或代理后重试。",
+                    "获取中文", System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            card.SentenceZh = zh;
+            ExampleZh       = zh;
+            _db.UpdateNoteSentenceZh(card.NoteId, zh);
+        }
+        finally
+        {
+            IsFetchingExampleZh = false;
+        }
+    }
+
     private void Grade(ReviewGrade grade)
     {
         if (_index >= _queue.Count) return;
@@ -186,12 +233,14 @@ public class AiStudyViewModel : BaseViewModel
         GrammarText = c.WordEn;
         ExampleDe   = c.SentenceDe;
         ExampleEn   = c.SentenceEn;
+        ExampleZh   = c.SentenceZh;
         IsFlipped   = false;
         IsFinished  = false;
         OnPropertyChanged(nameof(HasChinese));
         OnPropertyChanged(nameof(HasGrammar));
         OnPropertyChanged(nameof(HasExampleDe));
         OnPropertyChanged(nameof(HasExampleEn));
+        OnPropertyChanged(nameof(HasExampleZh));
         Speak(GermanText, "de");
     }
 
