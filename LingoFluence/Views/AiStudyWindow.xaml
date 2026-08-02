@@ -15,7 +15,7 @@
 
         <!-- Progress bar -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
-            <ProgressBar Height="8" Value="{Binding Progress}" Maximum="1"
+            <ProgressBar Height="8" Value="{Binding Progress, Mode=OneWay}" Maximum="1"
                          Foreground="{StaticResource PrimaryBrush}"
                          Background="#DDE8F5" BorderThickness="0"/>
             <TextBlock Text="{Binding ProgressText}"
