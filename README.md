@@ -27,6 +27,26 @@ dotnet run --project LingoFluence
 
 App data (database, media, caches) is stored under `%LOCALAPPDATA%\LingoFluence`.
 
+## Packaging (Windows)
+
+Two PowerShell scripts are provided for producing a distributable build:
+
+```powershell
+# Build a self-contained single-file executable into .\publish
+.\build.ps1
+
+# Build + install for the current user (Start Menu shortcut, no admin needed)
+.\install.ps1
+
+# Also add a Desktop shortcut
+.\install.ps1 -Desktop
+```
+
+`build.ps1` publishes a self-contained `win-x64` executable, so the target
+machine does not need the .NET runtime installed. `install.ps1` copies it to
+`%LOCALAPPDATA%\Programs\LingoFluence` and creates shortcuts. To uninstall,
+delete that folder and the shortcut(s).
+
 ## License
 
 Licensed under the [GNU Affero General Public License v3.0](LICENSE).
