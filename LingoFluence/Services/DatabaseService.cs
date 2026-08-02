@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using LingoFluence.Models;
 
@@ -60,6 +61,9 @@ public class DatabaseService
         EnsureColumn(conn, "notes", "word_en",     "TEXT");
         EnsureColumn(conn, "notes", "sentence_en", "TEXT");
         EnsureColumn(conn, "decks", "is_ai",       "INTEGER NOT NULL DEFAULT 0");
+        // Stores the AI generation transcript (JSON array of AiConversationTurn)
+        // so an AI deck can be reopened and refined.
+        EnsureColumn(conn, "decks", "conversation", "TEXT");
     }
 
     // Idempotently add a column to a table if it doesn't already exist.
@@ -168,26 +172,116 @@ public class DatabaseService
     // ─── AI deck ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Persists an AI-generated deck. The user request is stored as import_path
-    /// so AiService can re-load the same cache key on re-import.
+    /// Persists a new AI-generated deck along with its generation transcript.
+    /// The user request is stored as import_path for reference; the full
+    /// conversation is stored as JSON so the deck can be reopened and refined.
     /// </summary>
-    public int SaveAiDeck(string name, string userRequest, IEnumerable<AiCardData> cards)
+    public int SaveAiDeck(string name, string userRequest,
+        IEnumerable<AiCardData> cards, IReadOnlyList<AiConversationTurn>? conversation = null)
     {
         int deckId;
         using (var conn = Open())
         {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO decks (name, import_path, imported_at, media_folder, is_ai)
-                VALUES ($n, $p, $t, '', 1); SELECT last_insert_rowid();";
+                INSERT INTO decks (name, import_path, imported_at, media_folder, is_ai, conversation)
+                VALUES ($n, $p, $t, '', 1, $cv); SELECT last_insert_rowid();";
             cmd.Parameters.AddWithValue("$n", name);
             cmd.Parameters.AddWithValue("$p", userRequest);
             cmd.Parameters.AddWithValue("$t", DateTime.Now.ToString("o"));
+            cmd.Parameters.AddWithValue("$cv", SerializeConversation(conversation));
             deckId = Convert.ToInt32(cmd.ExecuteScalar());
         }
 
+        SaveNotesAndCards(deckId, BuildAiRows(cards));
+        return deckId;
+    }
+
+    /// <summary>
+    /// Replaces an existing AI deck's cards and transcript in place (same deck id,
+    /// so continuing a conversation never spawns a duplicate deck). Review history
+    /// is reset because the card set is regenerated.
+    /// </summary>
+    public void UpdateAiDeck(int deckId, string name,
+        IEnumerable<AiCardData> cards, IReadOnlyList<AiConversationTurn> conversation)
+    {
+        using (var conn = Open())
+        {
+            using var tx = conn.BeginTransaction();
+            using (var del = conn.CreateCommand())
+            {
+                // Notes cascade-delete their cards via the FK.
+                del.CommandText = "DELETE FROM notes WHERE deck_id=$d";
+                del.Parameters.AddWithValue("$d", deckId);
+                del.ExecuteNonQuery();
+            }
+            using (var upd = conn.CreateCommand())
+            {
+                upd.CommandText = "UPDATE decks SET name=$n, conversation=$cv WHERE id=$d";
+                upd.Parameters.AddWithValue("$n", name);
+                upd.Parameters.AddWithValue("$cv", SerializeConversation(conversation));
+                upd.Parameters.AddWithValue("$d", deckId);
+                upd.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
+
+        SaveNotesAndCards(deckId, BuildAiRows(cards));
+    }
+
+    /// <summary>Loads the stored generation transcript for an AI deck (empty if none).</summary>
+    public List<AiConversationTurn> GetConversation(int deckId)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT conversation FROM decks WHERE id=$id";
+        cmd.Parameters.AddWithValue("$id", deckId);
+        var v = cmd.ExecuteScalar();
+        var json = v as string;
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<AiConversationTurn>>(json) ?? [];
+        }
+        catch { return []; }
+    }
+
+    /// <summary>Reads an AI deck's cards back as AiCardData for editing/preview.</summary>
+    public List<AiCardData> GetAiCards(int deckId)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT n.answer_text, n.context_text, n.word_en, n.sentence_de, n.sentence_en
+            FROM notes n WHERE n.deck_id=$d ORDER BY n.id ASC";
+        cmd.Parameters.AddWithValue("$d", deckId);
+
+        var list = new List<AiCardData>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(new AiCardData(
+                German:    r.GetString(0),
+                English:   r.IsDBNull(1) ? "" : r.GetString(1),
+                Grammar:   r.IsDBNull(2) ? "" : r.GetString(2),
+                ExampleDe: r.IsDBNull(3) ? "" : r.GetString(3),
+                ExampleEn: r.IsDBNull(4) ? "" : r.GetString(4)));
+        }
+        return list;
+    }
+
+    private static string SerializeConversation(IReadOnlyList<AiConversationTurn>? conversation)
+        => conversation == null || conversation.Count == 0
+            ? (string)"" : JsonSerializer.Serialize(conversation);
+
+    private static IEnumerable<(long ankiNoteId, string answer, string context, string? audio,
+                     long ankiCardId, DateTime dueDate, int interval, double ease,
+                     int reps, int lapses, CardState state,
+                     string sentenceDe, string wordEn, string sentenceEn)>
+        BuildAiRows(IEnumerable<AiCardData> cards)
+    {
         var baseId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var rows = cards.Select((c, i) =>
+        return cards.Select((c, i) =>
         {
             long id = -(baseId + i);   // negative → never collides with real Anki IDs (timestamps)
             return (ankiNoteId: id,
@@ -205,9 +299,6 @@ public class DatabaseService
                     wordEn:     c.Grammar,
                     sentenceEn: c.ExampleEn);
         });
-
-        SaveNotesAndCards(deckId, rows);
-        return deckId;
     }
 
     // ─── Note / Card import ──────────────────────────────────────────────────

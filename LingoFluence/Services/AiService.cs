@@ -98,12 +98,19 @@ public class AiService
 
     // ── Card generation ───────────────────────────────────────────────────────
 
-    public async Task<List<AiCardData>> GenerateCardsAsync(
-        string userRequest,
+    /// <summary>
+    /// Generates (or refines) a flashcard deck from a full conversation transcript.
+    /// The entire conversation is sent on every turn and Claude is asked to return
+    /// the COMPLETE updated deck, so one conversation always maps to exactly one
+    /// card set — continuing to chat refines the same deck rather than producing a
+    /// disjoint second one. Cached by a hash of the whole conversation.
+    /// </summary>
+    public async Task<List<AiCardData>> GenerateFromConversationAsync(
+        IReadOnlyList<AiConversationTurn> conversation,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
-        var cacheKey  = CacheKey(userRequest);
+        var cacheKey  = ConversationCacheKey(conversation);
         var cacheFile = Path.Combine(CacheDir, cacheKey + ".json");
 
         if (File.Exists(cacheFile))
@@ -119,7 +126,7 @@ public class AiService
                              "claude CLI not found. Install it (npm i -g @anthropic-ai/claude-code) and restart.");
 
         progress?.Report("Asking Claude to generate flashcards…");
-        var json = await RunClaudeAsync(claudePath, BuildPrompt(userRequest), ct);
+        var json = await RunClaudeAsync(claudePath, BuildConversationPrompt(conversation), ct);
 
         progress?.Report("Parsing response…");
         var cards = ParseCards(json)
@@ -130,7 +137,7 @@ public class AiService
             throw new InvalidOperationException("Claude returned an empty card list.");
 
         await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(cards, JsonOpts), Encoding.UTF8, ct);
-        progress?.Report($"✓ {cards.Count} cards generated.");
+        progress?.Report($"✓ {cards.Count} cards ready.");
         return cards;
     }
 
@@ -194,19 +201,35 @@ public class AiService
         return stdout.Trim();
     }
 
-    private static string BuildPrompt(string userRequest) => $"""
-        You are a German language flashcard generator.
-        Return ONLY a JSON array — no markdown fences, no explanation, just raw JSON.
-
-        Each object must have exactly these string fields:
-        - "german"     : the German word/phrase (nouns with article, e.g. "der Hund")
-        - "english"    : concise English meaning, include key usage notes
-        - "grammar"    : grammar note, e.g. "noun: der Hund, Hunde · masculine" or "verb: kaufen, kaufte, hat gekauft"
-        - "example_de" : a natural German example sentence
-        - "example_en" : English translation of that sentence
-
-        User request: {userRequest}
-        """;
+    private static string BuildConversationPrompt(IReadOnlyList<AiConversationTurn> conversation)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("You are a German language flashcard generator.");
+        sb.AppendLine("Return ONLY a JSON array — no markdown fences, no explanation, just raw JSON.");
+        sb.AppendLine();
+        sb.AppendLine("Each object must have exactly these string fields:");
+        sb.AppendLine("- \"german\"     : the German word/phrase (nouns with article, e.g. \"der Hund\")");
+        sb.AppendLine("- \"english\"    : concise English meaning, include key usage notes");
+        sb.AppendLine("- \"grammar\"    : grammar note, e.g. \"noun: der Hund, Hunde · masculine\" or \"verb: kaufen, kaufte, hat gekauft\"");
+        sb.AppendLine("- \"example_de\" : a natural German example sentence");
+        sb.AppendLine("- \"example_en\" : English translation of that sentence");
+        sb.AppendLine();
+        sb.AppendLine("Below is the conversation so far between the user and you. Treat it as ongoing:");
+        sb.AppendLine("apply every instruction in order and return the COMPLETE updated deck that");
+        sb.AppendLine("reflects all requests — not just the newest one. If the latest message asks to");
+        sb.AppendLine("add, remove, or change cards, produce the full resulting list.");
+        sb.AppendLine();
+        sb.AppendLine("=== CONVERSATION ===");
+        foreach (var turn in conversation)
+        {
+            var who = turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? "ASSISTANT" : "USER";
+            sb.AppendLine($"[{who}] {turn.Text}");
+        }
+        sb.AppendLine("=== END CONVERSATION ===");
+        sb.AppendLine();
+        sb.AppendLine("Now output the complete JSON array for the current deck.");
+        return sb.ToString();
+    }
 
     private static List<AiCardData>? ParseCards(string raw)
     {
@@ -221,8 +244,12 @@ public class AiService
         catch { return null; }
     }
 
-    private static string CacheKey(string req)
-        => Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(req.Trim().ToLowerInvariant())));
+    private static string ConversationCacheKey(IReadOnlyList<AiConversationTurn> conversation)
+    {
+        var joined = string.Join("\n", conversation.Select(t => $"{t.Role}:{t.Text.Trim()}"))
+                           .ToLowerInvariant();
+        return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(joined)));
+    }
 
     private static string Trim(string s, int max)
         => s.Length <= max ? s : s[..max] + "…";

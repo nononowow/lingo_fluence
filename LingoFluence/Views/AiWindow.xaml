@@ -70,7 +70,7 @@
                             </TextBox.Resources>
                         </TextBox>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="📥  Import Deck"
+                    <Button Grid.Column="1" Content="{Binding ImportButtonText}"
                             Command="{Binding ImportCommand}"
                             Style="{StaticResource SuccessBtn}" FontSize="13"
                             Padding="0,8" VerticalAlignment="Bottom"/>

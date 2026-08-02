@@ -22,7 +22,7 @@ public class MainViewModel : BaseViewModel
     public Deck? SelectedDeck
     {
         get => _selectedDeck;
-        set { Set(ref _selectedDeck, value); OnPropertyChanged(nameof(CanStudy)); }
+        set { Set(ref _selectedDeck, value); OnPropertyChanged(nameof(CanStudy)); OnPropertyChanged(nameof(CanEditAi)); }
     }
 
     public bool IsImporting
@@ -48,6 +48,9 @@ public class MainViewModel : BaseViewModel
     public ICommand DeleteCommand  { get; }
     public ICommand RefreshCommand { get; }
     public ICommand OpenAiCommand  { get; }
+    public ICommand EditAiCommand  { get; }
+
+    public bool CanEditAi => SelectedDeck is { IsAi: true };
 
     public MainViewModel()
     {
@@ -56,6 +59,7 @@ public class MainViewModel : BaseViewModel
         DeleteCommand  = new RelayCommand(_ => DeleteDeck(),   _ => SelectedDeck != null);
         RefreshCommand = new RelayCommand(_ => LoadDecks());
         OpenAiCommand  = new RelayCommand(_ => OpenAiWindow());
+        EditAiCommand  = new RelayCommand(_ => EditAiDeck(), _ => CanEditAi);
         LoadDecks();
     }
 
@@ -161,6 +165,14 @@ public class MainViewModel : BaseViewModel
         var win = new Views.AiWindow();
         win.ShowDialog();
         LoadDecks(); // deck list may have a new AI deck after import
+    }
+
+    private void EditAiDeck()
+    {
+        if (SelectedDeck is not { IsAi: true } deck) return;
+        var win = new Views.AiWindow(deck.Id, deck.Name);
+        win.ShowDialog();
+        LoadDecks(); // cards/name may have changed
     }
 
     private void DeleteDeck()
