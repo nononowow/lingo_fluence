@@ -1,0 +1,124 @@
+<Window x:Class="LingoFluence.Views.AiStudyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding DeckTitle}"
+        Height="580" Width="680"
+        Icon="/appicon.ico"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Progress bar -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <ProgressBar Height="8" Value="{Binding Progress}" Maximum="1"
+                         Foreground="{StaticResource PrimaryBrush}"
+                         Background="#DDE8F5" BorderThickness="0"/>
+            <TextBlock Text="{Binding ProgressText}"
+                       HorizontalAlignment="Right" VerticalAlignment="Top"
+                       FontSize="12" Margin="0,-18,0,0"
+                       Foreground="{StaticResource SecondaryTextBrush}"/>
+        </Grid>
+
+        <!-- FRONT: German word -->
+        <Border Grid.Row="1"
+                Visibility="{Binding IsFront, Converter={StaticResource BoolToVis}}"
+                Background="White" CornerRadius="16" Effect="{StaticResource CardShadow}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
+                <TextBlock Text="{Binding GermanText}"
+                           FontSize="52" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}"
+                           TextAlignment="Center" TextWrapping="Wrap"/>
+                <Button Content="🔊  Speak" Click="SpeakGerman_Click"
+                        Style="{StaticResource GhostBtn}"
+                        Margin="0,24,0,0" Padding="20,8" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- BACK: meaning + grammar + examples -->
+        <Border Grid.Row="1"
+                Visibility="{Binding IsFlipped, Converter={StaticResource BoolToVis}}"
+                Background="White" CornerRadius="16" Effect="{StaticResource CardShadow}"
+                Padding="28">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- German heading + speak -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding GermanText}" FontSize="26" FontWeight="Bold"
+                                   Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="🔊" Click="SpeakGerman_Click"
+                                Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                    </Grid>
+                    <!-- English meaning -->
+                    <TextBlock Text="{Binding EnglishText}" FontSize="18"
+                               Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <!-- Grammar note -->
+                    <TextBlock Text="{Binding GrammarText}" FontSize="13" FontStyle="Italic"
+                               Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"
+                               Visibility="{Binding HasGrammar, Converter={StaticResource BoolToVis}}"
+                               Margin="0,0,0,14"/>
+                    <Separator Background="#E0E0E0" Margin="0,0,0,14"
+                               Visibility="{Binding HasExampleDe, Converter={StaticResource BoolToVis}}"/>
+                    <!-- Example DE + speak -->
+                    <Grid Margin="0,0,0,6"
+                          Visibility="{Binding HasExampleDe, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding ExampleDe}" FontSize="14"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="🔊" Tag="{Binding ExampleDe}" Click="SpeakDE_Click"
+                                Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                    </Grid>
+                    <!-- Example EN + speak -->
+                    <Grid Visibility="{Binding HasExampleEn, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding ExampleEn}" FontSize="14" FontStyle="Italic"
+                                   Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="🔊" Tag="{Binding ExampleEn}" Click="SpeakEN_Click"
+                                Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- FINISHED overlay -->
+        <Border Grid.Row="1"
+                Visibility="{Binding IsFinished, Converter={StaticResource BoolToVis}}"
+                Background="White" CornerRadius="16" Effect="{StaticResource CardShadow}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="🎉" FontSize="64" HorizontalAlignment="Center"/>
+                <TextBlock Text="Session complete!" FontSize="24" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center" Margin="0,12,0,6"/>
+                <TextBlock Text="{Binding ProgressText}" FontSize="14"
+                           Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- REVEAL button (front state) -->
+        <Button Grid.Row="2" Content="🔄  Reveal Answer"
+                Command="{Binding FlipCommand}"
+                Style="{StaticResource PrimaryBtn}"
+                Visibility="{Binding IsFront, Converter={StaticResource BoolToVis}}"
+                Padding="0,14" FontSize="15" Margin="0,16,0,0"/>
+
+        <!-- GRADE buttons (back state, not finished) -->
+        <UniformGrid Grid.Row="2" Columns="2"
+                     Visibility="{Binding CanGrade, Converter={StaticResource BoolToVis}}"
+                     Margin="0,16,0,0">
+            <Button Content="↩  Again" Command="{Binding GradeAgainCommand}"
+                    Style="{StaticResource DangerBtn}" Padding="0,14" FontSize="15" Margin="0,0,8,0"/>
+            <Button Content="✓  Good"  Command="{Binding GradeGoodCommand}"
+                    Style="{StaticResource SuccessBtn}" Padding="0,14" FontSize="15" Margin="8,0,0,0"/>
+        </UniformGrid>
+
+        <!-- CLOSE button (finished state) -->
+        <Button Grid.Row="2" Content="Close" Click="Close_Click"
+                Style="{StaticResource GhostBtn}"
+                Visibility="{Binding IsFinished, Converter={StaticResource BoolToVis}}"
+                Padding="0,14" FontSize="15" Margin="0,16,0,0"/>
+    </Grid>
+</Window>

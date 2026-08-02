@@ -1,0 +1,284 @@
+<Window x:Class="LingoFluence.Views.StudyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Study Mode" Height="680" Width="800"
+        Icon="/appicon.ico"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        KeyDown="Window_KeyDown">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="56"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Progress header ── -->
+        <Border Grid.Row="0" Background="{StaticResource PrimaryBrush}">
+            <Grid Margin="24,0">
+                <ProgressBar x:Name="ProgressBar" Minimum="0" Maximum="1"
+                             Height="6" VerticalAlignment="Center"
+                             Foreground="White" Background="#3578C8"
+                             Margin="0,0,200,0">
+                    <ProgressBar.Template>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Border Background="#3578C8" CornerRadius="3" Height="6">
+                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                        Background="White" CornerRadius="3"/>
+                            </Border>
+                        </ControlTemplate>
+                    </ProgressBar.Template>
+                </ProgressBar>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Score: " Foreground="White" FontSize="13"/>
+                    <TextBlock Text="{Binding Score}" Foreground="White" FontSize="13" FontWeight="Bold"/>
+                    <TextBlock Text="  |  " Foreground="White" FontSize="13" Opacity="0.6"/>
+                    <TextBlock Text="{Binding Done}" Foreground="White" FontSize="13"/>
+                    <TextBlock Text=" / " Foreground="White" FontSize="13" Opacity="0.6"/>
+                    <TextBlock Text="{Binding Total}" Foreground="White" FontSize="13"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ── Card area ── -->
+        <Border Grid.Row="1" Margin="32,24,32,16" Background="White"
+                CornerRadius="16" Effect="{StaticResource CardShadow}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="48,32,48,32" VerticalAlignment="Center">
+
+                    <!-- Audio: speak the WORD (spell mode) + optional sentence audio -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                        <Button x:Name="AudioBtn" Content="🔊  Play Word"
+                                Style="{StaticResource PrimaryBtn}"
+                                FontSize="15" Padding="20,10"
+                                Click="AudioBtn_Click" Margin="0,0,8,0"/>
+                        <Button x:Name="SentenceAudioBtn" Content="🗣  Sentence"
+                                Style="{StaticResource GhostBtn}"
+                                FontSize="14" Padding="16,10"
+                                Click="SentenceAudioBtn_Click"
+                                Visibility="{Binding HasAudio, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="🔊 speaks the word · 🗣 plays the recorded example sentence"
+                               FontSize="11" FontStyle="Italic" TextAlignment="Center"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               Margin="0,0,0,18"
+                               Visibility="{Binding HasAudio, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- Context / Translation -->
+                    <TextBlock x:Name="ContextBlock"
+                               Text="{Binding ContextText}"
+                               FontSize="17" TextAlignment="Center"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                    <Separator Margin="0,0,0,20" Opacity="0.3"/>
+
+                    <!-- Hint display (monospace, letter by letter) -->
+                    <TextBlock Text="{Binding HintDisplay}"
+                               FontFamily="Courier New" FontSize="30" FontWeight="Bold"
+                               TextAlignment="Center"
+                               Foreground="{StaticResource TextBrush}"
+                               Margin="0,0,0,16"/>
+
+                    <!-- Answer (revealed) -->
+                    <TextBlock Text="{Binding AnswerText}"
+                               FontSize="36" FontWeight="Bold" TextAlignment="Center"
+                               Foreground="{StaticResource PrimaryBrush}"
+                               Margin="0,0,0,8"
+                               Visibility="{Binding IsAnswerShown, Converter={StaticResource BoolToVis}}"/>
+
+                    <!-- Result indicator: Correct / Wrong -->
+                    <Border HorizontalAlignment="Center" CornerRadius="20" Padding="20,6"
+                            Margin="0,0,0,16"
+                            Visibility="{Binding ResultShown, Converter={StaticResource BoolVis}}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCorrect}" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock FontSize="14" FontWeight="Bold" Foreground="White">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="✗  Incorrect"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsCorrect}" Value="True">
+                                            <Setter Property="Text" Value="✓  Correct!"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+
+                    <!-- Copyable details (shown after answer is revealed) -->
+                    <Border Background="#F7F9FC" CornerRadius="10" Padding="16,12"
+                            Margin="0,4,0,20"
+                            Visibility="{Binding IsAnswerShown, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <!-- German word -->
+                            <Grid Margin="0,4" Visibility="{Binding IsAnswerShown, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="German word" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding AnswerText, Mode=OneWay}"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                         Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button Content="🔊" ToolTip="Speak" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding AnswerText}" Click="SpeakDe_Click"/>
+                                    <Button Content="📋" ToolTip="Copy" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding AnswerText}" Click="Copy_Click"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- German example sentence (matches the audio) -->
+                            <Grid Margin="0,4" Visibility="{Binding HasSentenceDe, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Example (audio)" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding SentenceDe, Mode=OneWay}"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         FontSize="14" TextWrapping="Wrap"
+                                         Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button Content="🔊" ToolTip="Speak" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding SentenceDe}" Click="SpeakDe_Click"/>
+                                    <Button Content="📋" ToolTip="Copy" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding SentenceDe}" Click="Copy_Click"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- English meaning -->
+                            <Grid Margin="0,4" Visibility="{Binding HasWordEn, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Meaning" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding WordEn, Mode=OneWay}"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         FontSize="14" TextWrapping="Wrap"
+                                         Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button Content="🔊" ToolTip="Speak" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding WordEn}" Click="SpeakEn_Click"/>
+                                    <Button Content="📋" ToolTip="Copy" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding WordEn}" Click="Copy_Click"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- English example sentence -->
+                            <Grid Margin="0,4" Visibility="{Binding HasSentenceEn, Converter={StaticResource BoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="English example" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource SecondaryTextBrush}" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="1" Text="{Binding SentenceEn, Mode=OneWay}"
+                                         IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                         FontSize="14" TextWrapping="Wrap"
+                                         Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                    <Button Content="🔊" ToolTip="Speak" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding SentenceEn}" Click="SpeakEn_Click"/>
+                                    <Button Content="📋" ToolTip="Copy" Style="{StaticResource GhostBtn}"
+                                            Padding="8,2" FontSize="13" Tag="{Binding SentenceEn}" Click="Copy_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Input field (hidden after answer shown) -->
+                    <TextBox x:Name="InputBox"
+                             Text="{Binding UserInput, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource StudyInput}"
+                             HorizontalAlignment="Stretch" Margin="0,0,0,20"
+                             Visibility="{Binding IsAnswerShown, Converter={StaticResource InvBoolToVis}}"
+                             KeyDown="InputBox_KeyDown"/>
+
+                    <!-- Action buttons: Hint | Show Answer | Check -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                Visibility="{Binding IsAnswerShown, Converter={StaticResource InvBoolToVis}}">
+                        <Button Content="💡  Hint"        Style="{StaticResource HintBtn}"
+                                Margin="0,0,10,0"        Click="HintBtn_Click"/>
+                        <Button Content="Show Answer"     Style="{StaticResource GhostBtn}"
+                                Margin="0,0,10,0"        Click="ShowAnswerBtn_Click"/>
+                        <Button Content="✓  Check"        Style="{StaticResource SuccessBtn}"
+                                IsEnabled="{Binding CanCheck}" Click="CheckBtn_Click"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ── Grade buttons ── -->
+        <Border Grid.Row="2" Margin="32,0,32,20" Background="White"
+                CornerRadius="12" Effect="{StaticResource CardShadow}" Padding="20,14"
+                Visibility="{Binding IsAnswerShown, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Text="How well did you remember?" FontSize="12"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                <UniformGrid Columns="4" Rows="1">
+                    <Button Content="Again" Style="{StaticResource DangerBtn}"
+                            Margin="4,0" Click="Again_Click"/>
+                    <Button Content="Hard"  Style="{StaticResource WarningBtn}"
+                            Margin="4,0" Click="Hard_Click"/>
+                    <Button Content="Good"  Style="{StaticResource SuccessBtn}"
+                            Margin="4,0" Click="Good_Click"/>
+                    <Button Content="Easy"  Style="{StaticResource PrimaryBtn}"
+                            Margin="4,0" Click="Easy_Click"/>
+                </UniformGrid>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Copy toast ── -->
+        <Border x:Name="Toast" Grid.RowSpan="3"
+                Background="#CC1F2937" CornerRadius="20" Padding="20,10"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,40" Opacity="0" Visibility="Collapsed"
+                Panel.ZIndex="10">
+            <TextBlock x:Name="ToastText" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+        </Border>
+
+        <!-- ── Finished overlay ── -->
+        <Border Grid.RowSpan="3" Background="#F0F4F8"
+                Visibility="{Binding IsFinished, Converter={StaticResource BoolVis}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="🎉" FontSize="64" HorizontalAlignment="Center"/>
+                <TextBlock Text="Session Complete!" FontSize="28" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center" Margin="0,12,0,8"/>
+                <TextBlock HorizontalAlignment="Center" FontSize="18"
+                           Foreground="{StaticResource SecondaryTextBrush}">
+                    <Run Text="Score: "/><Run Text="{Binding Score, Mode=OneWay}"
+                         Foreground="{StaticResource PrimaryBrush}" FontWeight="Bold"/>
+                    <Run Text="  ·  Cards reviewed: "/><Run Text="{Binding Done, Mode=OneWay}"
+                         Foreground="{StaticResource PrimaryBrush}" FontWeight="Bold"/>
+                </TextBlock>
+                <Button Content="Close" Style="{StaticResource PrimaryBtn}"
+                        FontSize="16" Padding="40,12" Margin="0,28,0,0"
+                        HorizontalAlignment="Center" Click="CloseBtn_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

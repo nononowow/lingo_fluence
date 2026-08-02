@@ -1,0 +1,5 @@
+1. Design an windows software like Anki, you need to parse the Anki data in :C:\Users\A\Documents\German. You could verify it by these test data.
+2. You need to support serval modes:
+a. Spell Mode. The German Audio get out first and then the answer is the German word. I could directly type the word one by one by myself. If I could directy Answer: just give me the answer and If I had type the answer, check and score it. You need to support 'Hint' mode, you give me serveral alphabet randomly (each time different), So I only need to complete the rest.
+3. Don't need login or anything else, just need to support the import the Anki-world-package and the Anki-style study mode. Keep the software simple enough but need the Review schedule and the forgetting-prevention algorithm.
+4. Keep the software simple enough, you could make it more beatuful.

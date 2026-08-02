@@ -1,0 +1,182 @@
+<Window x:Class="LingoFluence.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LingoFluence.ViewModels"
+        Title="LingoFluence" Height="620" Width="940"
+        Icon="/appicon.ico"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Window.DataContext><vm:MainViewModel/></Window.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Header ── -->
+        <Border Grid.Row="0" Background="{StaticResource PrimaryBrush}">
+            <Grid Margin="24,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📚" FontSize="24" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="LingoFluence" FontSize="20" FontWeight="Bold"
+                               Foreground="White" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="🤖  AI Cards" Style="{StaticResource ImportBtn}"
+                            Command="{Binding OpenAiCommand}" Margin="0,0,10,0"/>
+                    <Button Content="＋  Import Deck" Style="{StaticResource ImportBtn}"
+                            Command="{Binding ImportCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ── Content ── -->
+        <Grid Grid.Row="1" Margin="24,20,24,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="220"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Deck list card -->
+            <Border Grid.Column="0" Background="White" CornerRadius="12"
+                    Effect="{StaticResource CardShadow}">
+                <Grid>
+                    <!-- Empty state -->
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Decks.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="📦" FontSize="48" HorizontalAlignment="Center"/>
+                        <TextBlock Text="No decks yet" FontSize="16" Margin="0,8,0,4"
+                                   Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text='Click "＋ Import Deck" to get started' FontSize="13"
+                                   Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Deck list -->
+                    <ListBox ItemsSource="{Binding Decks}" SelectedItem="{Binding SelectedDeck}"
+                             Background="Transparent" BorderThickness="0" Padding="8"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding"     Value="0"/>
+                                <Setter Property="Margin"      Value="0,4"/>
+                                <Setter Property="Background"  Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="bd" CornerRadius="10" Padding="16,12">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#F0F7FF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#E3EFFF"/>
+                                                    <Setter TargetName="bd" Property="BorderBrush"
+                                                            Value="{StaticResource PrimaryBrush}"/>
+                                                    <Setter TargetName="bd" Property="BorderThickness" Value="2"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Text="{Binding StatsDisplay}" FontSize="12" Margin="0,3,0,0"
+                                                   Foreground="{StaticResource SecondaryTextBrush}"/>
+                                    </StackPanel>
+                                    <!-- AI badge (AI-generated decks) -->
+                                    <Border Grid.Column="1" CornerRadius="12" Padding="10,4"
+                                            Background="#8E44AD"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding IsAi, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="🤖 AI" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                    </Border>
+                                    <!-- Due badge (regular decks with due cards) -->
+                                    <Border Grid.Column="1" CornerRadius="12" Padding="10,4"
+                                            Background="{StaticResource PrimaryBrush}"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding DueCards, Converter={StaticResource ZeroToCollapsed}}">
+                                        <TextBlock Foreground="White" FontWeight="Bold" FontSize="12">
+                                            <Run Text="{Binding DueCards, Mode=OneWay}"/>
+                                            <Run Text=" due"/>
+                                        </TextBlock>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- ── Side panel ── -->
+            <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                <Button Content="▶  Start Study" Style="{StaticResource SuccessBtn}"
+                        Command="{Binding StudyCommand}" Padding="0,14" FontSize="15"/>
+                <Button Content="🗑  Delete" Style="{StaticResource DangerBtn}"
+                        Command="{Binding DeleteCommand}" Padding="0,10" Margin="0,10,0,0" Opacity="0.85"/>
+
+                <!-- Deck info panel -->
+                <Border Background="White" CornerRadius="10" Padding="16" Margin="0,16,0,0"
+                        Effect="{StaticResource CardShadow}"
+                        Visibility="{Binding SelectedDeck, Converter={StaticResource NullToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="DECK INFO" FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource SecondaryTextBrush}"/>
+                        <TextBlock Text="{Binding SelectedDeck.Name}" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" Margin="0,6,0,10"
+                                   Foreground="{StaticResource TextBrush}"/>
+                        <Separator Margin="0,0,0,8"/>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Total"  Foreground="{StaticResource SecondaryTextBrush}" FontSize="12"/>
+                            <TextBlock Text="{Binding SelectedDeck.TotalCards}" DockPanel.Dock="Right"
+                                       FontWeight="Bold" FontSize="13" Foreground="{StaticResource TextBrush}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,4">
+                            <TextBlock Text="New"   Foreground="{StaticResource SecondaryTextBrush}" FontSize="12"/>
+                            <TextBlock Text="{Binding SelectedDeck.NewCards}" DockPanel.Dock="Right"
+                                       FontWeight="Bold" FontSize="13" Foreground="{StaticResource PrimaryBrush}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,4">
+                            <TextBlock Text="Due"   Foreground="{StaticResource SecondaryTextBrush}" FontSize="12"/>
+                            <TextBlock Text="{Binding SelectedDeck.DueCards}" DockPanel.Dock="Right"
+                                       FontWeight="Bold" FontSize="13" Foreground="{StaticResource WarningBrush}"/>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Loading overlay -->
+        <Border Grid.RowSpan="2" Background="#AA000000"
+                Visibility="{Binding IsImporting, Converter={StaticResource BoolToVis}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="⏳  Importing…" FontSize="22" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center"/>
+                <TextBlock Text="This may take a moment for large decks." FontSize="14"
+                           Foreground="White" Opacity="0.75" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
