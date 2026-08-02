@@ -57,13 +57,15 @@
                 Padding="28">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <!-- German heading + speak -->
+                    <!-- German heading + speak + copy -->
                     <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding GermanText}" FontSize="26" FontWeight="Bold"
                                    Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="🔊" Click="SpeakGerman_Click"
                                 Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                        <Button Grid.Column="2" Content="📋" ToolTip="Copy" Tag="{Binding GermanText}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="10,5" Margin="4,0,0,0"/>
                     </Grid>
                     <!-- IPA phonetic transcription + on-demand fetch -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -77,13 +79,23 @@
                                    Foreground="{StaticResource SecondaryTextBrush}"
                                    Visibility="{Binding IsFetchingIpa, Converter={StaticResource BoolToVis}}"/>
                     </StackPanel>
-                    <!-- English meaning -->
-                    <TextBlock Text="{Binding EnglishText}" FontSize="18"
-                               Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <!-- Chinese meaning -->
-                    <TextBlock Text="{Binding ChineseText}" FontSize="18"
-                               Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8"
-                               Visibility="{Binding HasChinese, Converter={StaticResource BoolToVis}}"/>
+                    <!-- English meaning + copy -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding EnglishText}" FontSize="18"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="📋" ToolTip="Copy" Tag="{Binding EnglishText}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="8,2" FontSize="13" Margin="8,0,0,0"/>
+                    </Grid>
+                    <!-- Chinese meaning + copy -->
+                    <Grid Margin="0,0,0,8"
+                          Visibility="{Binding HasChinese, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding ChineseText}" FontSize="18"
+                                   Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="📋" ToolTip="Copy" Tag="{Binding ChineseText}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="8,2" FontSize="13" Margin="8,0,0,0"/>
+                    </Grid>
                     <!-- On-demand Chinese fetch (older cards generated before the Chinese field existed) -->
                     <Button Content="🌐  获取中文" Command="{Binding FetchChineseCommand}"
                             Style="{StaticResource GhostBtn}" Padding="10,5" HorizontalAlignment="Left"
@@ -99,27 +111,36 @@
                                Margin="0,0,0,14"/>
                     <Separator Background="#E0E0E0" Margin="0,0,0,14"
                                Visibility="{Binding HasExampleDe, Converter={StaticResource BoolToVis}}"/>
-                    <!-- Example DE + speak -->
+                    <!-- Example DE + speak + copy -->
                     <Grid Margin="0,0,0,6"
                           Visibility="{Binding HasExampleDe, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding ExampleDe}" FontSize="14"
                                    Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="🔊" Tag="{Binding ExampleDe}" Click="SpeakDE_Click"
                                 Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                        <Button Grid.Column="2" Content="📋" ToolTip="Copy" Tag="{Binding ExampleDe}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="8,2" FontSize="13" Margin="4,0,0,0"/>
                     </Grid>
-                    <!-- Example EN + speak -->
+                    <!-- Example EN + speak + copy -->
                     <Grid Visibility="{Binding HasExampleEn, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding ExampleEn}" FontSize="14" FontStyle="Italic"
                                    Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="🔊" Tag="{Binding ExampleEn}" Click="SpeakEN_Click"
                                 Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
+                        <Button Grid.Column="2" Content="📋" ToolTip="Copy" Tag="{Binding ExampleEn}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="8,2" FontSize="13" Margin="4,0,0,0"/>
                     </Grid>
-                    <!-- Example DE → Chinese translation -->
-                    <TextBlock Text="{Binding ExampleZh}" FontSize="14"
-                               Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Visibility="{Binding HasExampleZh, Converter={StaticResource BoolToVis}}"/>
+                    <!-- Example DE → Chinese translation + copy -->
+                    <Grid Margin="0,8,0,0"
+                          Visibility="{Binding HasExampleZh, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding ExampleZh}" FontSize="14"
+                                   Foreground="{StaticResource PrimaryBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="📋" ToolTip="Copy" Tag="{Binding ExampleZh}" Click="Copy_Click"
+                                Style="{StaticResource GhostBtn}" Padding="8,2" FontSize="13" Margin="8,0,0,0"/>
+                    </Grid>
                     <!-- On-demand Chinese fetch for the German example sentence -->
                     <Button Content="🌐  例句中文" Command="{Binding FetchExampleZhCommand}"
                             Style="{StaticResource GhostBtn}" Padding="10,5" HorizontalAlignment="Left"
@@ -167,5 +188,14 @@
                 Style="{StaticResource GhostBtn}"
                 Visibility="{Binding IsFinished, Converter={StaticResource BoolToVis}}"
                 Padding="0,14" FontSize="15" Margin="0,16,0,0"/>
+
+        <!-- ── Copy toast ── -->
+        <Border x:Name="Toast" Grid.RowSpan="3"
+                Background="#CC1F2937" CornerRadius="20" Padding="20,10"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,40" Opacity="0" Visibility="Collapsed"
+                Panel.ZIndex="10">
+            <TextBlock x:Name="ToastText" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+        </Border>
     </Grid>
 </Window>
