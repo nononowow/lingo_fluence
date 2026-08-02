@@ -15,6 +15,7 @@ public class AiStudyViewModel : BaseViewModel
     private readonly AudioService            _audio  = new();
     private readonly TtsService              _tts    = new();
     private readonly TranslationService      _trans  = new();
+    private readonly PhoneticService         _phon   = new();
 
     private List<Card>    _queue     = new();
     private int           _index;
@@ -30,6 +31,7 @@ public class AiStudyViewModel : BaseViewModel
     private string _exampleDe   = "";
     private string _exampleEn   = "";
     private string _exampleZh   = "";
+    private string _ipaText     = "";
 
     public string GermanText  { get => _germanText;  private set => Set(ref _germanText,  value); }
     public string EnglishText { get => _englishText; private set => Set(ref _englishText, value); }
@@ -38,6 +40,7 @@ public class AiStudyViewModel : BaseViewModel
     public string ExampleDe   { get => _exampleDe;   private set => Set(ref _exampleDe,   value); }
     public string ExampleEn   { get => _exampleEn;   private set => Set(ref _exampleEn,   value); }
     public string ExampleZh   { get => _exampleZh;   private set { Set(ref _exampleZh, value); OnPropertyChanged(nameof(HasExampleZh)); OnPropertyChanged(nameof(CanFetchExampleZh)); } }
+    public string IpaText     { get => _ipaText;     private set { Set(ref _ipaText, value); OnPropertyChanged(nameof(HasIpa)); OnPropertyChanged(nameof(CanFetchIpa)); } }
 
     private bool _isFetchingChinese;
     public bool IsFetchingChinese
@@ -53,6 +56,13 @@ public class AiStudyViewModel : BaseViewModel
         private set { Set(ref _isFetchingExampleZh, value); OnPropertyChanged(nameof(CanFetchExampleZh)); }
     }
 
+    private bool _isFetchingIpa;
+    public bool IsFetchingIpa
+    {
+        get => _isFetchingIpa;
+        private set { Set(ref _isFetchingIpa, value); OnPropertyChanged(nameof(CanFetchIpa)); }
+    }
+
     public bool HasChinese   => !string.IsNullOrWhiteSpace(ChineseText);
     // Offer the fetch button only when flipped, this card lacks Chinese, and none is in flight.
     public bool CanFetchChinese => IsFlipped && !HasChinese && !IsFetchingChinese;
@@ -63,6 +73,11 @@ public class AiStudyViewModel : BaseViewModel
     // Offer the sentence-fetch button only when flipped, there is a German sentence,
     // it lacks a Chinese translation, and none is in flight.
     public bool CanFetchExampleZh => IsFlipped && HasExampleDe && !HasExampleZh && !IsFetchingExampleZh;
+
+    public bool HasIpa => !string.IsNullOrWhiteSpace(IpaText);
+    // Offer the phonetic button (beside Speak, both faces) when this word lacks an
+    // IPA transcription and none is in flight.
+    public bool CanFetchIpa => !HasIpa && !IsFetchingIpa;
 
     // ── Flip + progress ───────────────────────────────────────────────────────
 
@@ -97,6 +112,7 @@ public class AiStudyViewModel : BaseViewModel
     public ICommand GradeGoodCommand    { get; }
     public ICommand FetchChineseCommand { get; }
     public ICommand FetchExampleZhCommand { get; }
+    public ICommand FetchIpaCommand { get; }
 
     public string DeckTitle { get; private set; } = "";
 
@@ -108,6 +124,7 @@ public class AiStudyViewModel : BaseViewModel
         GradeGoodCommand  = new RelayCommand(_ => Grade(ReviewGrade.Good),  _ => CanGrade);
         FetchChineseCommand = new RelayCommand(async _ => await FetchChineseAsync(), _ => CanFetchChinese);
         FetchExampleZhCommand = new RelayCommand(async _ => await FetchExampleZhAsync(), _ => CanFetchExampleZh);
+        FetchIpaCommand = new RelayCommand(async _ => await FetchIpaAsync(), _ => CanFetchIpa);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -202,6 +219,38 @@ public class AiStudyViewModel : BaseViewModel
         }
     }
 
+    /// <summary>
+    /// Fetches the IPA phonetic transcription of the current German word on demand,
+    /// shows it, and writes it back to the note so it's cached permanently.
+    /// </summary>
+    private async Task FetchIpaAsync()
+    {
+        if (_index >= _queue.Count) return;
+        var card = _queue[_index];
+        if (string.IsNullOrWhiteSpace(card.FrontText)) return;
+        IsFetchingIpa = true;
+        try
+        {
+            var ipa = await _phon.GetIpaAsync(card.FrontText);
+            if (string.IsNullOrWhiteSpace(ipa))
+            {
+                // Leave IpaText empty so the button stays and the user can retry.
+                System.Windows.MessageBox.Show(
+                    "未找到音标，请检查网络或代理后重试。",
+                    "音标", System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            card.Ipa = ipa;
+            IpaText  = ipa;
+            _db.UpdateNoteIpa(card.NoteId, ipa);
+        }
+        finally
+        {
+            IsFetchingIpa = false;
+        }
+    }
+
     private void Grade(ReviewGrade grade)
     {
         if (_index >= _queue.Count) return;
@@ -234,6 +283,7 @@ public class AiStudyViewModel : BaseViewModel
         ExampleDe   = c.SentenceDe;
         ExampleEn   = c.SentenceEn;
         ExampleZh   = c.SentenceZh;
+        IpaText     = c.Ipa;
         IsFlipped   = false;
         IsFinished  = false;
         OnPropertyChanged(nameof(HasChinese));
@@ -241,6 +291,7 @@ public class AiStudyViewModel : BaseViewModel
         OnPropertyChanged(nameof(HasExampleDe));
         OnPropertyChanged(nameof(HasExampleEn));
         OnPropertyChanged(nameof(HasExampleZh));
+        OnPropertyChanged(nameof(HasIpa));
         Speak(GermanText, "de");
     }
 

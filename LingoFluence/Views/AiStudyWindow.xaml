@@ -33,9 +33,20 @@
                            FontSize="52" FontWeight="Bold"
                            Foreground="{StaticResource TextBrush}"
                            TextAlignment="Center" TextWrapping="Wrap"/>
-                <Button Content="🔊  Speak" Click="SpeakGerman_Click"
-                        Style="{StaticResource GhostBtn}"
-                        Margin="0,24,0,0" Padding="20,8" HorizontalAlignment="Center"/>
+                <!-- IPA phonetic transcription -->
+                <TextBlock Text="{Binding IpaText}" FontSize="22"
+                           Foreground="{StaticResource SecondaryTextBrush}"
+                           TextAlignment="Center" Margin="0,12,0,0"
+                           Visibility="{Binding HasIpa, Converter={StaticResource BoolToVis}}"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
+                    <Button Content="🔊  Speak" Click="SpeakGerman_Click"
+                            Style="{StaticResource GhostBtn}" Padding="20,8"/>
+                    <Button Content="ˈɪ  音标" Command="{Binding FetchIpaCommand}"
+                            Style="{StaticResource GhostBtn}" Padding="20,8" Margin="10,0,0,0"
+                            Visibility="{Binding CanFetchIpa, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock Text="⏳" FontSize="18" VerticalAlignment="Center" Margin="10,0,0,0"
+                               Visibility="{Binding IsFetchingIpa, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -54,6 +65,18 @@
                         <Button Grid.Column="1" Content="🔊" Click="SpeakGerman_Click"
                                 Style="{StaticResource GhostBtn}" Padding="10,5" Margin="8,0,0,0"/>
                     </Grid>
+                    <!-- IPA phonetic transcription + on-demand fetch -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="{Binding IpaText}" FontSize="16" VerticalAlignment="Center"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Visibility="{Binding HasIpa, Converter={StaticResource BoolToVis}}"/>
+                        <Button Content="ˈɪ  音标" Command="{Binding FetchIpaCommand}"
+                                Style="{StaticResource GhostBtn}" Padding="10,5"
+                                Visibility="{Binding CanFetchIpa, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="⏳  正在获取音标…" FontSize="13" VerticalAlignment="Center"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Visibility="{Binding IsFetchingIpa, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
                     <!-- English meaning -->
                     <TextBlock Text="{Binding EnglishText}" FontSize="18"
                                Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
