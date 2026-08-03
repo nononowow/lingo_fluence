@@ -66,11 +66,106 @@ public class DatabaseService
         EnsureColumn(conn, "notes", "sentence_zh", "TEXT");
         // IPA phonetic transcription of the German word. Filled on demand and cached.
         EnsureColumn(conn, "notes", "ipa",         "TEXT");
+        // Translation of a story's topic/title. Its own column because sentence_zh may
+        // already hold a legacy whole-paragraph translation on older story notes.
+        EnsureColumn(conn, "notes", "title_zh",    "TEXT");
+        EnsureColumn(conn, "notes", "title_en",    "TEXT");
         EnsureColumn(conn, "decks", "is_ai",       "INTEGER NOT NULL DEFAULT 0");
         // Stores the AI generation transcript (JSON array of AiConversationTurn)
         // so an AI deck can be reopened and refined.
         EnsureColumn(conn, "decks", "conversation", "TEXT");
+
+        RepairLegacyStoryNotes(conn);
     }
+
+    /// <summary>
+    /// Heals story cards written before stories were stored one sentence per line.
+    /// Those notes hold the whole text on a single line with no translations, so the
+    /// study view renders one giant untranslated row. The per-sentence cards generated
+    /// alongside them DO carry English and Chinese, so the aligned blocks that
+    /// AiService.StoryToCards now writes can be rebuilt by splitting the text and
+    /// looking each sentence up among its deck siblings.
+    /// Idempotent: a note already holding multiple lines is left alone.
+    /// </summary>
+    private static void RepairLegacyStoryNotes(SqliteConnection conn)
+    {
+        const string prefix = "\U0001F4D6"; // 📖 marks the full-text card of a story
+        var stories = new List<(int Id, int DeckId, string Text)>();
+        using (var find = conn.CreateCommand())
+        {
+            // Only single-line notes need repair; a repaired one contains '\n'.
+            find.CommandText = @"
+                SELECT id, deck_id, sentence_de FROM notes
+                 WHERE answer_text LIKE $p || '%'
+                   AND sentence_de IS NOT NULL AND sentence_de <> ''
+                   AND instr(sentence_de, char(10)) = 0";
+            find.Parameters.AddWithValue("$p", prefix);
+            using var r = find.ExecuteReader();
+            while (r.Read())
+                stories.Add((r.GetInt32(0), r.GetInt32(1), r.GetString(2)));
+        }
+        if (stories.Count == 0) return;
+
+        foreach (var story in stories)
+        {
+            // Sibling sentence cards: German → (English, Chinese). Built per deck so a
+            // sentence reused by two decks can't pull in the wrong translation.
+            var siblings = new Dictionary<string, (string En, string Zh)>(StringComparer.OrdinalIgnoreCase);
+            using (var sib = conn.CreateCommand())
+            {
+                sib.CommandText = @"
+                    SELECT answer_text, context_text, chinese FROM notes
+                     WHERE deck_id = $d AND answer_text NOT LIKE $p || '%'";
+                sib.Parameters.AddWithValue("$d", story.DeckId);
+                sib.Parameters.AddWithValue("$p", prefix);
+                using var r = sib.ExecuteReader();
+                while (r.Read())
+                {
+                    var key = r.GetString(0).Trim();
+                    if (key.Length == 0) continue;
+                    siblings[key] = (r.IsDBNull(1) ? "" : r.GetString(1).Trim(),
+                                     r.IsDBNull(2) ? "" : r.GetString(2).Trim());
+                }
+            }
+
+            var sentences = SplitSentences(story.Text);
+            if (sentences.Count == 0) continue;
+
+            var de = new List<string>(sentences.Count);
+            var en = new List<string>(sentences.Count);
+            var zh = new List<string>(sentences.Count);
+            foreach (var s in sentences)
+            {
+                de.Add(s);
+                // A sentence with no sibling contributes empty lines, keeping the three
+                // blocks index-aligned rather than shifting later translations up.
+                var hit = siblings.TryGetValue(s, out var t) ? t : (En: "", Zh: "");
+                en.Add(hit.En);
+                zh.Add(hit.Zh);
+            }
+
+            using var upd = conn.CreateCommand();
+            upd.CommandText = @"
+                UPDATE notes SET sentence_de = $de, sentence_en = $en, chinese = $zh
+                 WHERE id = $id";
+            upd.Parameters.AddWithValue("$de", string.Join("\n", de));
+            upd.Parameters.AddWithValue("$en", string.Join("\n", en));
+            upd.Parameters.AddWithValue("$zh", string.Join("\n", zh));
+            upd.Parameters.AddWithValue("$id", story.Id);
+            upd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Splits a paragraph after . ! ? into trimmed sentences, keeping the terminator so
+    /// each line matches the sibling sentence card's stored German text exactly.
+    /// </summary>
+    private static List<string> SplitSentences(string text) =>
+        System.Text.RegularExpressions.Regex
+            .Split(text.Replace("\r", " ").Replace("\n", " "), @"(?<=[.!?])\s+")
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
 
     // Idempotently add a column to a table if it doesn't already exist.
     private static void EnsureColumn(SqliteConnection conn, string table, string col, string decl)
@@ -371,12 +466,13 @@ public class DatabaseService
                    n.answer_text, n.context_text, n.audio_file,
                    c.due_date, c.interval, c.ease_factor,
                    c.rep_count, c.lapse_count, c.card_state,
-                   n.sentence_de, n.word_en, n.sentence_en, n.chinese, n.sentence_zh, n.ipa
+                   n.sentence_de, n.word_en, n.sentence_en, n.chinese, n.sentence_zh, n.ipa,
+                   n.title_en, n.title_zh
             FROM cards c
             JOIN notes n ON n.id = c.note_id
             WHERE c.deck_id = $did
               AND (c.card_state = 0 OR c.due_date <= datetime('now'))
-            ORDER BY c.card_state ASC, c.due_date ASC
+            ORDER BY c.card_state ASC, c.due_date ASC, c.id ASC
             LIMIT 500";
         cmd.Parameters.AddWithValue("$did", deckId);
 
@@ -386,14 +482,19 @@ public class DatabaseService
         while (r.Read())
         {
             var state = (CardState)r.GetInt32(11);
-            if (state == CardState.New && newSeen >= maxNew) continue;
-            if (state == CardState.New) newSeen++;
+            var front = r.GetString(3);
+            // Story cards ("📖 Title") are exempt from the new-card budget. A story's
+            // per-sentence cards would otherwise fill it entirely, leaving every later
+            // story unreachable no matter how many sessions the user studies.
+            bool isStory = front.StartsWith("\U0001F4D6", StringComparison.Ordinal);
+            if (state == CardState.New && !isStory && newSeen >= maxNew) continue;
+            if (state == CardState.New && !isStory) newSeen++;
             result.Add(new Card
             {
                 Id         = r.GetInt32(0),
                 NoteId     = r.GetInt32(1),
                 DeckId     = r.GetInt32(2),
-                FrontText  = r.GetString(3),
+                FrontText  = front,
                 BackText   = r.IsDBNull(4) ? "" : r.GetString(4),
                 AudioFile  = r.IsDBNull(5) ? null : r.GetString(5),
                 DueDate    = DateTime.TryParse(r.GetString(6), out var dt) ? dt : DateTime.Now,
@@ -407,7 +508,9 @@ public class DatabaseService
                 SentenceEn = r.IsDBNull(14) ? "" : r.GetString(14),
                 Chinese    = r.IsDBNull(15) ? "" : r.GetString(15),
                 SentenceZh = r.IsDBNull(16) ? "" : r.GetString(16),
-                Ipa        = r.IsDBNull(17) ? "" : r.GetString(17)
+                Ipa        = r.IsDBNull(17) ? "" : r.GetString(17),
+                TitleEn    = r.IsDBNull(18) ? "" : r.GetString(18),
+                TitleZh    = r.IsDBNull(19) ? "" : r.GetString(19)
             });
         }
         return result;
@@ -454,6 +557,18 @@ public class DatabaseService
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE notes SET sentence_zh=$c WHERE id=$id";
         cmd.Parameters.AddWithValue("$c", sentenceZh);
+        cmd.Parameters.AddWithValue("$id", noteId);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Persists fetched topic/title translations onto a story note so they're cached permanently.</summary>
+    public void UpdateNoteTitleTranslations(int noteId, string titleEn, string titleZh)
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE notes SET title_en=$e, title_zh=$z WHERE id=$id";
+        cmd.Parameters.AddWithValue("$e", titleEn);
+        cmd.Parameters.AddWithValue("$z", titleZh);
         cmd.Parameters.AddWithValue("$id", noteId);
         cmd.ExecuteNonQuery();
     }

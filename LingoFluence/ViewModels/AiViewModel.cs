@@ -126,7 +126,11 @@ public class AiViewModel : BaseViewModel
         var path = await AiService.FindClaudeAsync();
         IsAvailable = path != null;
         AddMsg(IsAvailable
-            ? "✅  claude CLI ready. Describe the flashcards you want to generate, then press Generate."
+            ? "✅  claude CLI ready. Describe the flashcards you want to generate, then press Generate.\n"
+              + "     Vocabulary — e.g. \"top 100 A1 nouns with articles and plurals\".\n"
+              + "     Reading stories — mention \"stories\", \"short story\" or \"故事\" and you'll get\n"
+              + "     the full text plus a card per sentence (EN/中文 + structure notes), per word\n"
+              + "     and per phrase. Stories arrive a few at a time; press More to keep going."
             : "⚠️  claude CLI not found in PATH. Install it (npm i -g @anthropic-ai/claude-code) and restart.");
     }
 

@@ -27,6 +27,9 @@ public partial class AiStudyWindow : System.Windows.Window
     private void SpeakEN_Click(object sender, System.Windows.RoutedEventArgs e)
         => _vm.Speak((sender as System.Windows.Controls.Button)?.Tag?.ToString(), "en");
 
+    private void Stop_Click(object sender, System.Windows.RoutedEventArgs e)
+        => _vm.StopSpeaking();
+
     private void Close_Click(object sender, System.Windows.RoutedEventArgs e) => Close();
 
     // Copy a field's text (passed via the button's Tag) to the clipboard,

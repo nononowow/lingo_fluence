@@ -18,6 +18,8 @@ public class Card
     public string Chinese { get; set; } = "";    // Chinese meaning of the word (AI decks)
     public string SentenceZh { get; set; } = ""; // Chinese translation of the German example sentence (on-demand)
     public string Ipa { get; set; } = "";        // IPA phonetic transcription of the German word (on-demand)
+    public string TitleEn { get; set; } = "";    // English translation of a story's topic/title (on-demand)
+    public string TitleZh { get; set; } = "";    // Chinese translation of a story's topic/title (on-demand)
     public DateTime DueDate { get; set; } = DateTime.Today;
     public int Interval { get; set; } = 0; // days; 0 = new/learning
     public double EaseFactor { get; set; } = 2.5;
